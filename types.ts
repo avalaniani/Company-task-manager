@@ -1,4 +1,5 @@
-export type UserRole = 'PLATFORM_ADMIN' | 'SUPER_ADMIN' | 'EMPLOYEE';
+
+export type UserRole = 'PLATFORM_ADMIN' | 'SUPER_ADMIN' | 'EMPLOYEE' | 'WORKER';
 
 export type TaskType = 'LOCKED' | 'FLOATING' | 'URGENT';
 export type TaskStatus = 'PENDING' | 'IN_PROGRESS' | 'PAUSED' | 'COMPLETED' | 'BLOCKED';
@@ -39,4 +40,15 @@ export interface Task {
   startTimeConstraint?: string; // For LOCKED tasks (HH:MM)
   dueTime?: string;
   blockedReason?: string; // Reason for blockage
+}
+
+export interface AttendanceRecord {
+  id: string;
+  userId: string;
+  companyId: string;
+  date: string; // YYYY-MM-DD
+  startTime: string; // ISO String
+  endTime?: string; // ISO String
+  totalMinutes?: number;
+  status: 'ACTIVE' | 'COMPLETED';
 }
