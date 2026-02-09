@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Play, 
   Pause, 
@@ -23,9 +23,17 @@ import {
   LogOut,
   Key,
   Sparkles,
-  Loader2
+  Loader2,
+  Building2,
+  ShieldCheck,
+  Globe,
+  Settings,
+  Users,
+  User as UserIcon,
+  ChevronRight,
+  ChevronLeft
 } from 'lucide-react';
-import { User, Task, UserRole, TaskType, TaskStatus } from './types';
+import { User, Task, UserRole, TaskType, TaskStatus, Company } from './types';
 
 // Firebase Imports
 import { db } from './firebase';
@@ -37,7 +45,9 @@ import {
   deleteDoc, 
   doc,
   query,
-  orderBy
+  orderBy,
+  where,
+  writeBatch
 } from 'firebase/firestore';
 
 const BLOCKER_REASONS = [
@@ -89,14 +99,134 @@ const TaskTypeIcon = ({ type }: { type: TaskType }) => {
   return <Briefcase className="w-4 h-4 text-sky-400" />;
 };
 
-// --- Modals ---
+// --- Authentication Screens ---
 
-const LoginScreen = ({ 
-    onLogin, 
+const AuthLayout = ({ children }: { children: React.ReactNode }) => (
+    <div className="flex h-screen w-full items-center justify-center bg-gradient-to-br from-sky-100 via-purple-50 to-pink-100 p-4 overflow-hidden relative">
+        {/* Abstract Shapes for background */}
+        <div className="absolute top-20 left-20 w-64 h-64 bg-pink-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-float"></div>
+        <div className="absolute bottom-20 right-20 w-64 h-64 bg-blue-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-float" style={{animationDelay: '1s'}}></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-sky-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse"></div>
+        
+        <div className="bg-white/70 backdrop-blur-xl p-10 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white w-full max-w-md animate-fade-in-up relative z-10">
+            {children}
+        </div>
+    </div>
+);
+
+const CompanyLoginScreen = ({ 
+    companies,
+    onCompanyLogin,
+    onPlatformLoginClick,
     error,
     isLoading
 }: { 
+    companies: Company[],
+    onCompanyLogin: (companyId: string, password: string) => void,
+    onPlatformLoginClick: () => void,
+    error: string,
+    isLoading: boolean
+}) => {
+    const [selectedCompanyId, setSelectedCompanyId] = useState('');
+    const [password, setPassword] = useState('');
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (selectedCompanyId && password) {
+            onCompanyLogin(selectedCompanyId, password);
+        }
+    };
+
+    return (
+        <AuthLayout>
+            <div className="text-center mb-10">
+                <div className="w-20 h-20 bg-gradient-to-tr from-sky-400 to-indigo-400 rounded-2xl flex items-center justify-center text-white mx-auto mb-6 shadow-lg shadow-indigo-200 transform rotate-3">
+                        <Building2 className="w-10 h-10 text-white" />
+                </div>
+                <h1 className="text-3xl font-black text-slate-800 tracking-tight">כניסת חברה</h1>
+                <p className="text-slate-500 mt-2 font-light">
+                    אנא בחר את החברה שלך והזן קוד גישה
+                </p>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-5">
+                <div>
+                    <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide">חברה</label>
+                    <div className="relative">
+                        <select 
+                            value={selectedCompanyId}
+                            onChange={(e) => setSelectedCompanyId(e.target.value)}
+                            className="w-full px-5 py-4 bg-white border-0 rounded-2xl shadow-sm focus:ring-2 focus:ring-sky-200 text-slate-700 outline-none transition-all appearance-none cursor-pointer"
+                            required
+                        >
+                            <option value="" disabled>בחר חברה מהרשימה...</option>
+                            {companies.filter(c => c.status === 'ACTIVE').map(c => (
+                                <option key={c.id} value={c.id}>{c.name}</option>
+                            ))}
+                        </select>
+                        <div className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                            <ChevronLeft className="w-5 h-5" />
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide">סיסמת חברה</label>
+                    <input 
+                        type="password" 
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="w-full px-5 py-4 bg-white border-0 rounded-2xl shadow-sm focus:ring-2 focus:ring-sky-200 text-slate-700 outline-none transition-all placeholder:text-slate-300"
+                        placeholder="••••••••"
+                        required
+                    />
+                </div>
+
+                {error && (
+                    <div className="p-4 bg-rose-50 text-rose-500 text-sm rounded-2xl flex items-center gap-2 border border-rose-100">
+                        <AlertTriangle className="w-5 h-5" />
+                        {error}
+                    </div>
+                )}
+
+                <button 
+                    type="submit"
+                    disabled={isLoading || !selectedCompanyId}
+                    className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-xl shadow-slate-200 flex items-center justify-center gap-3 group mt-6 disabled:opacity-70 disabled:cursor-not-allowed"
+                >
+                    {isLoading ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                        <>
+                        <span>המשך לצוות</span>
+                        <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                        </>
+                    )}
+                </button>
+            </form>
+            
+            <div className="mt-8 text-center pt-6 border-t border-slate-100">
+                <button 
+                    onClick={onPlatformLoginClick}
+                    className="text-xs text-slate-400 hover:text-sky-600 transition-colors font-medium flex items-center justify-center gap-1 mx-auto"
+                >
+                    <ShieldCheck className="w-3 h-3" />
+                    כניסת מנהל מערכת (Platform Admin)
+                </button>
+            </div>
+        </AuthLayout>
+    );
+};
+
+const UserLoginScreen = ({ 
+    company,
+    onLogin, 
+    onBack,
+    error,
+    isLoading
+}: { 
+    company: Company,
     onLogin: (u: string, p: string) => void, 
+    onBack: () => void,
     error: string,
     isLoading: boolean
 }) => {
@@ -109,81 +239,354 @@ const LoginScreen = ({
     };
 
     return (
-        <div className="flex h-screen w-full items-center justify-center bg-gradient-to-br from-sky-100 via-purple-50 to-pink-100 p-4">
-            {/* Abstract Shapes for background */}
-            <div className="absolute top-20 left-20 w-64 h-64 bg-pink-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-float"></div>
-            <div className="absolute bottom-20 right-20 w-64 h-64 bg-blue-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-float" style={{animationDelay: '1s'}}></div>
-            
-            <div className="bg-white/70 backdrop-blur-xl p-10 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white w-full max-w-md animate-fade-in-up relative z-10">
-                <div className="text-center mb-10">
-                    <div className="w-20 h-20 bg-gradient-to-tr from-sky-400 to-indigo-400 rounded-2xl flex items-center justify-center text-white mx-auto mb-6 shadow-lg shadow-indigo-200 transform rotate-3">
-                         <Sparkles className="w-10 h-10 text-white" />
-                    </div>
-                    <h1 className="text-4xl font-black text-slate-800 tracking-tight">TaskFlow</h1>
-                    <p className="text-slate-500 mt-2 font-light text-lg">
-                        ניהול משימות ברוגע.
-                    </p>
+        <AuthLayout>
+            <div className="text-center mb-8">
+                <div className="w-20 h-20 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-center text-slate-700 mx-auto mb-6 shadow-inner">
+                        {company.logo ? (
+                            <img src={company.logo} alt={company.name} className="w-full h-full object-cover rounded-2xl" />
+                        ) : (
+                            <span className="text-3xl font-bold">{company.name.charAt(0)}</span>
+                        )}
+                </div>
+                <h1 className="text-2xl font-black text-slate-800 tracking-tight">צוות {company.name}</h1>
+                <p className="text-slate-500 mt-1 font-light">
+                    הזדהות עובד
+                </p>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                    <label className="block text-xs font-bold text-slate-400 mb-1.5 uppercase tracking-wide">שם משתמש</label>
+                    <input 
+                        type="text" 
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        className="w-full px-5 py-3.5 bg-white border-0 rounded-2xl shadow-sm focus:ring-2 focus:ring-sky-200 text-slate-700 outline-none transition-all placeholder:text-slate-300"
+                        required
+                        autoFocus
+                    />
+                </div>
+                <div>
+                    <label className="block text-xs font-bold text-slate-400 mb-1.5 uppercase tracking-wide">סיסמא</label>
+                    <input 
+                        type="password" 
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="w-full px-5 py-3.5 bg-white border-0 rounded-2xl shadow-sm focus:ring-2 focus:ring-sky-200 text-slate-700 outline-none transition-all placeholder:text-slate-300"
+                        required
+                    />
                 </div>
 
-                <form onSubmit={handleSubmit} className="space-y-5">
+                {error && (
+                    <div className="p-4 bg-rose-50 text-rose-500 text-sm rounded-2xl flex items-center gap-2 border border-rose-100">
+                        <AlertTriangle className="w-5 h-5" />
+                        {error}
+                    </div>
+                )}
+
+                <button 
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-xl shadow-slate-200 flex items-center justify-center gap-3 group mt-6 disabled:opacity-70 disabled:cursor-not-allowed"
+                >
+                    {isLoading ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <>
+                        <span>התחברות</span>
+                        <CheckCircle className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                      </>
+                    )}
+                </button>
+            </form>
+            
+            <div className="mt-6 text-center">
+                <button onClick={onBack} className="text-slate-400 hover:text-slate-600 text-sm font-medium transition-colors">
+                    חזרה לבחירת חברה
+                </button>
+            </div>
+        </AuthLayout>
+    );
+};
+
+const PlatformAdminLoginScreen = ({ 
+    onLogin, 
+    onBack,
+    error,
+    isLoading
+}: { 
+    onLogin: (u: string, p: string) => void, 
+    onBack: () => void,
+    error: string,
+    isLoading: boolean
+}) => {
+    const [username, setUsername] = useState('');
+    const [password, setPassword] = useState('');
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        onLogin(username, password);
+    };
+
+    return (
+        <AuthLayout>
+             <div className="text-center mb-10">
+                <div className="w-20 h-20 bg-slate-800 rounded-2xl flex items-center justify-center text-white mx-auto mb-6 shadow-xl shadow-slate-300">
+                     <ShieldCheck className="w-10 h-10" />
+                </div>
+                <h1 className="text-2xl font-black text-slate-800 tracking-tight">Platform Admin</h1>
+                <p className="text-slate-500 mt-2 font-light">
+                    גישה לניהול המערכת כולה
+                </p>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-5">
+                <div>
+                    <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide">משתמש מנהל</label>
+                    <input 
+                        type="text" 
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        className="w-full px-5 py-4 bg-white border-0 rounded-2xl shadow-sm focus:ring-2 focus:ring-slate-200 text-slate-700 outline-none transition-all placeholder:text-slate-300"
+                        required
+                    />
+                </div>
+                <div>
+                    <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide">סיסמא</label>
+                    <input 
+                        type="password" 
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="w-full px-5 py-4 bg-white border-0 rounded-2xl shadow-sm focus:ring-2 focus:ring-slate-200 text-slate-700 outline-none transition-all placeholder:text-slate-300"
+                        required
+                    />
+                </div>
+
+                {error && (
+                    <div className="p-4 bg-rose-50 text-rose-500 text-sm rounded-2xl flex items-center gap-2 border border-rose-100">
+                        <AlertTriangle className="w-5 h-5" />
+                        {error}
+                    </div>
+                )}
+
+                <button 
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full py-4 bg-slate-800 text-white rounded-2xl font-bold hover:bg-slate-700 transition-all shadow-xl shadow-slate-200 flex items-center justify-center gap-3 group mt-6 disabled:opacity-70 disabled:cursor-not-allowed"
+                >
+                     {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <span>כניסה למערכת</span>}
+                </button>
+            </form>
+             <div className="mt-8 text-center">
+                <button onClick={onBack} className="text-slate-400 hover:text-slate-600 text-sm font-medium transition-colors">
+                    ביטול וחזרה
+                </button>
+            </div>
+        </AuthLayout>
+    );
+}
+
+// --- Modals ---
+
+const PlatformAdminSettingsModal = ({
+    isOpen,
+    onClose,
+    user,
+    onSave
+}: {
+    isOpen: boolean,
+    onClose: () => void,
+    user: User,
+    onSave: (id: string, name: string, score: number, username: string, password: string) => void
+}) => {
+    const [username, setUsername] = useState(user.username);
+    const [password, setPassword] = useState(user.password);
+
+    if (!isOpen) return null;
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        onSave(user.id, user.name, user.efficiencyScore, username, password);
+        onClose();
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 backdrop-blur-sm">
+            <div className="bg-white rounded-3xl shadow-soft w-full max-w-sm p-8 animate-fade-in-up border border-white">
+                <div className="flex justify-between items-center mb-8">
+                    <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                        <Settings className="w-6 h-6 text-slate-400" />
+                        הגדרות חשבון מנהל
+                    </h2>
+                    <button onClick={onClose} className="bg-slate-50 p-2 rounded-full text-slate-400 hover:text-slate-600 transition-colors">
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+
+                <form onSubmit={handleSubmit} className="space-y-6">
                     <div>
-                        <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide">שם משתמש</label>
-                        <input 
-                            type="text" 
+                        <label className="block text-xs font-bold text-slate-400 mb-1.5 uppercase tracking-wide">שם משתמש חדש</label>
+                        <input
+                            type="text"
                             value={username}
                             onChange={(e) => setUsername(e.target.value)}
-                            className="w-full px-5 py-4 bg-white border-0 rounded-2xl shadow-sm focus:ring-2 focus:ring-sky-200 text-slate-700 outline-none transition-all placeholder:text-slate-300"
-                            placeholder="הזמן שם משתמש..."
+                            className="w-full px-4 py-3 bg-slate-50 border-0 rounded-xl focus:ring-2 focus:ring-slate-200 outline-none font-mono text-slate-700"
                             required
                         />
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide">סיסמא</label>
-                        <input 
-                            type="password" 
+                        <label className="block text-xs font-bold text-slate-400 mb-1.5 uppercase tracking-wide">סיסמא חדשה</label>
+                        <input
+                            type="text"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            className="w-full px-5 py-4 bg-white border-0 rounded-2xl shadow-sm focus:ring-2 focus:ring-sky-200 text-slate-700 outline-none transition-all placeholder:text-slate-300"
-                            placeholder="••••••••"
+                            className="w-full px-4 py-3 bg-slate-50 border-0 rounded-xl focus:ring-2 focus:ring-slate-200 outline-none font-mono text-slate-700"
                             required
                         />
                     </div>
 
-                    {error && (
-                        <div className="p-4 bg-rose-50 text-rose-500 text-sm rounded-2xl flex items-center gap-2 border border-rose-100">
-                            <AlertTriangle className="w-5 h-5" />
-                            {error}
-                        </div>
-                    )}
-
-                    <button 
-                        type="submit"
-                        disabled={isLoading}
-                        className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-xl shadow-slate-200 flex items-center justify-center gap-3 group mt-6 disabled:opacity-70 disabled:cursor-not-allowed"
-                    >
-                        {isLoading ? (
-                          <Loader2 className="w-5 h-5 animate-spin" />
-                        ) : (
-                          <>
-                            <span>התחברות</span>
-                            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                          </>
-                        )}
-                    </button>
-                </form>
-                
-                <div className="mt-8 text-center">
-                    <p className="text-xs text-slate-400 mb-1">כניסת הדגמה מהירה</p>
-                    <div className="flex gap-2 justify-center">
-                         <span className="bg-sky-50 px-3 py-1 rounded-full text-xs text-sky-600 font-mono">admin / 123</span>
+                    <div className="pt-2">
+                        <button
+                            type="submit"
+                            className="w-full py-3.5 bg-slate-900 text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-lg"
+                        >
+                            שמור שינויים
+                        </button>
                     </div>
-                </div>
+                </form>
             </div>
         </div>
     );
 };
 
-const CredentialRow: React.FC<{ user: User, onUpdate: (id: string, name: string, score: number, username: string, password: string) => void }> = ({ user, onUpdate }) => {
+const CompanyCreationModal = ({
+    isOpen,
+    onClose,
+    onCreate
+}: {
+    isOpen: boolean,
+    onClose: () => void,
+    onCreate: (companyName: string, companyPass: string, adminName: string, adminUser: string, adminPass: string) => void
+}) => {
+    const [companyName, setCompanyName] = useState('');
+    const [companyPass, setCompanyPass] = useState('');
+    const [adminName, setAdminName] = useState('');
+    const [adminUser, setAdminUser] = useState('');
+    const [adminPass, setAdminPass] = useState('');
+
+    if (!isOpen) return null;
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        onCreate(companyName, companyPass, adminName, adminUser, adminPass);
+        onClose();
+        setCompanyName('');
+        setCompanyPass('');
+        setAdminName('');
+        setAdminUser('');
+        setAdminPass('');
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 backdrop-blur-sm">
+            <div className="bg-white rounded-3xl shadow-soft w-full max-w-md p-8 animate-fade-in-up">
+                <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                        <Building2 className="w-6 h-6 text-indigo-500" />
+                        הקמת חברה חדשה
+                    </h2>
+                    <button onClick={onClose} className="bg-slate-50 p-2 rounded-full text-slate-400 hover:text-slate-600 transition-colors">
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+
+                <form onSubmit={handleSubmit} className="space-y-6">
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-xs font-bold text-slate-400 mb-1.5 uppercase tracking-wide">שם החברה</label>
+                            <input
+                                type="text"
+                                value={companyName}
+                                onChange={(e) => setCompanyName(e.target.value)}
+                                className="w-full px-4 py-3 bg-slate-50 border-0 rounded-xl focus:ring-2 focus:ring-indigo-200 outline-none transition-all placeholder:text-slate-300"
+                                placeholder="Tech Solutions Ltd."
+                                required
+                            />
+                        </div>
+                         <div>
+                            <label className="block text-xs font-bold text-slate-400 mb-1.5 uppercase tracking-wide">סיסמת כניסה לחברה</label>
+                            <input
+                                type="text"
+                                value={companyPass}
+                                onChange={(e) => setCompanyPass(e.target.value)}
+                                className="w-full px-4 py-3 bg-slate-50 border-0 rounded-xl focus:ring-2 focus:ring-indigo-200 outline-none transition-all placeholder:text-slate-300 font-mono"
+                                placeholder="קוד גישה לכלל העובדים"
+                                required
+                            />
+                        </div>
+                    </div>
+
+                    <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100">
+                        <div className="mb-4 text-indigo-800 font-bold text-sm flex items-center gap-2">
+                            <ShieldCheck className="w-4 h-4" />
+                            פרטי מנכ"ל / אדמין ראשי
+                        </div>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-medium text-indigo-400 mb-1">שם מלא</label>
+                                <input
+                                    type="text"
+                                    value={adminName}
+                                    onChange={(e) => setAdminName(e.target.value)}
+                                    className="w-full px-3 py-2 bg-white rounded-lg border-0 focus:ring-2 focus:ring-indigo-200 outline-none"
+                                    placeholder="ישראל ישראלי"
+                                    required
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-xs font-medium text-indigo-400 mb-1">שם משתמש</label>
+                                    <input
+                                        type="text"
+                                        value={adminUser}
+                                        onChange={(e) => setAdminUser(e.target.value)}
+                                        className="w-full px-3 py-2 bg-white rounded-lg border-0 focus:ring-2 focus:ring-indigo-200 outline-none"
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-indigo-400 mb-1">סיסמא</label>
+                                    <input
+                                        type="text"
+                                        value={adminPass}
+                                        onChange={(e) => setAdminPass(e.target.value)}
+                                        className="w-full px-3 py-2 bg-white rounded-lg border-0 focus:ring-2 focus:ring-indigo-200 outline-none"
+                                        required
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="pt-2">
+                        <button
+                            type="submit"
+                            className="w-full py-3.5 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200"
+                        >
+                            הקם חברה
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
+
+const CredentialRow: React.FC<{ 
+    user: User, 
+    onUpdate: (id: string, name: string, score: number, username: string, password: string) => void,
+    onDelete?: (id: string) => void
+}> = ({ user, onUpdate, onDelete }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [username, setUsername] = useState(user.username);
     const [password, setPassword] = useState(user.password);
@@ -241,10 +644,15 @@ const CredentialRow: React.FC<{ user: User, onUpdate: (id: string, name: string,
             <td className="p-4 font-mono text-slate-400 text-sm tracking-widest">
                 ••••••
             </td>
-            <td className="p-4 text-end">
+            <td className="p-4 text-end flex gap-2 justify-end">
                 <button onClick={() => setIsEditing(true)} className="p-2 text-slate-300 hover:text-sky-600 hover:bg-sky-50 rounded-xl opacity-0 group-hover:opacity-100 transition-all" title="ערוך">
                     <Pencil className="w-4 h-4" />
                 </button>
+                {onDelete && (
+                    <button onClick={() => onDelete(user.id)} className="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl opacity-0 group-hover:opacity-100 transition-all" title="מחק">
+                        <Trash2 className="w-4 h-4" />
+                    </button>
+                )}
             </td>
         </tr>
     );
@@ -350,12 +758,14 @@ const DeleteConfirmationModal = ({
   isOpen, 
   onClose, 
   onConfirm,
-  userName
+  userName,
+  title = "מחיקת עובד"
 }: { 
   isOpen: boolean, 
   onClose: () => void, 
   onConfirm: () => void,
-  userName: string
+  userName: string,
+  title?: string
 }) => {
   if (!isOpen) return null;
 
@@ -366,7 +776,7 @@ const DeleteConfirmationModal = ({
             <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mb-4">
                 <Trash2 className="w-8 h-8 text-rose-400" />
             </div>
-            <h2 className="text-xl font-bold text-slate-800 mb-2">מחיקת עובד</h2>
+            <h2 className="text-xl font-bold text-slate-800 mb-2">{title}</h2>
             <p className="text-slate-500 mb-8 text-sm leading-relaxed">
                 האם אתה בטוח שברצונך למחוק את <strong>{userName}</strong>?
                 <br />
@@ -1211,7 +1621,7 @@ const TaskHistoryModal = ({
 const EfficiencyReportsModal = ({ isOpen, onClose, users, tasks }: { isOpen: boolean, onClose: () => void, users: User[], tasks: Task[] }) => {
   if (!isOpen) return null;
 
-  const employees = users.filter(u => u.role !== 'SUPER_ADMIN');
+  const employees = users.filter(u => u.role !== 'SUPER_ADMIN' && u.role !== 'PLATFORM_ADMIN');
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 backdrop-blur-sm">
@@ -1298,7 +1708,7 @@ const EmployeeCockpit = ({
     user, 
     tasks, 
     onToggle, 
-    onComplete,
+    onComplete, 
     onAddTask,
     onBlock,
     onUpdateNotes
@@ -1503,6 +1913,372 @@ const EmployeeCockpit = ({
     );
 };
 
+const CompanyUsersModal = ({
+    isOpen,
+    onClose,
+    company,
+    users,
+    onUpdateUser,
+    onDeleteUser,
+    onAddUserClick
+}: {
+    isOpen: boolean,
+    onClose: () => void,
+    company: Company | null,
+    users: User[],
+    onUpdateUser: (id: string, name: string, score: number, username: string, password: string) => void,
+    onDeleteUser: (id: string) => void,
+    onAddUserClick: () => void
+}) => {
+    const [userToDelete, setUserToDelete] = useState<User | null>(null);
+
+    if (!isOpen || !company) return null;
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 backdrop-blur-sm">
+             <DeleteConfirmationModal
+                isOpen={!!userToDelete}
+                onClose={() => setUserToDelete(null)}
+                onConfirm={() => userToDelete && onDeleteUser(userToDelete.id)}
+                userName={userToDelete?.name || ''}
+            />
+
+            <div className="bg-white rounded-3xl shadow-soft w-full max-w-4xl p-8 animate-fade-in-up h-[600px] flex flex-col">
+                <div className="flex justify-between items-center mb-6">
+                     <div className="flex items-center gap-3">
+                        {company.logo ? <img src={company.logo} className="w-10 h-10 rounded-lg object-cover" /> : <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center font-bold text-slate-400">{company.name[0]}</div>}
+                        <div>
+                            <h2 className="text-xl font-bold text-slate-800">משתמשי חברה: {company.name}</h2>
+                            <p className="text-sm text-slate-500">ניהול גישה ומשתמשים</p>
+                        </div>
+                     </div>
+                     <button onClick={onClose} className="bg-slate-50 p-2 rounded-full text-slate-400 hover:text-slate-600">
+                        <X className="w-5 h-5" />
+                     </button>
+                </div>
+
+                <div className="mb-4">
+                     <button 
+                        onClick={onAddUserClick}
+                        className="flex items-center gap-2 px-4 py-2 bg-sky-500 text-white rounded-xl text-sm font-bold hover:bg-sky-600 transition-colors shadow-lg shadow-sky-200"
+                     >
+                        <UserPlus className="w-4 h-4" />
+                        הוסף משתמש לחברה
+                     </button>
+                </div>
+
+                <div className="flex-1 overflow-auto custom-scrollbar border border-slate-100 rounded-2xl">
+                    <table className="w-full text-right text-sm">
+                        <thead className="bg-slate-50 sticky top-0 text-slate-500 font-medium z-10">
+                            <tr>
+                                <th className="p-4">שם</th>
+                                <th className="p-4">תפקיד</th>
+                                <th className="p-4">שם משתמש</th>
+                                <th className="p-4">סיסמא</th>
+                                <th className="p-4">פעולות</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                            {users.map(u => (
+                                <CredentialRow key={u.id} user={u} onUpdate={onUpdateUser} onDelete={() => setUserToDelete(u)} />
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const CompanyCredentialRow: React.FC<{ 
+    company: Company, 
+    onUpdate: (id: string, name: string, password: string) => void 
+}> = ({ company, onUpdate }) => {
+    const [isEditing, setIsEditing] = useState(false);
+    const [name, setName] = useState(company.name);
+    const [password, setPassword] = useState(company.password || '');
+
+    const handleSave = () => {
+        onUpdate(company.id, name, password);
+        setIsEditing(false);
+    };
+
+    return isEditing ? (
+        <tr className="bg-indigo-50 transition-colors">
+            <td className="p-4">
+                 <input 
+                   type="text"
+                   value={name}
+                   onChange={(e) => setName(e.target.value)}
+                   className="w-full px-3 py-1.5 bg-white border border-indigo-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-200 outline-none text-indigo-700"
+                   autoFocus
+                />
+            </td>
+            <td className="p-4">
+                <input 
+                   type="text"
+                   value={password}
+                   onChange={(e) => setPassword(e.target.value)}
+                   className="w-full px-3 py-1.5 bg-white border border-indigo-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-200 outline-none font-mono text-slate-700"
+                />
+            </td>
+            <td className="p-4 flex gap-2 justify-end">
+                <button onClick={handleSave} className="p-2 bg-emerald-100 text-emerald-600 hover:bg-emerald-200 rounded-xl transition-colors shadow-sm">
+                    <CheckCircle className="w-4 h-4" />
+                </button>
+                <button onClick={() => setIsEditing(false)} className="p-2 bg-rose-100 text-rose-500 hover:bg-rose-200 rounded-xl transition-colors shadow-sm">
+                    <X className="w-4 h-4" />
+                </button>
+            </td>
+        </tr>
+    ) : (
+        <tr className="hover:bg-slate-50 group transition-colors border-b border-slate-50 last:border-0">
+            <td className="p-4 font-medium text-slate-700">{company.name}</td>
+            <td className="p-4 font-mono text-slate-500 text-sm tracking-widest">
+                {company.password || '---'}
+            </td>
+            <td className="p-4 text-end flex gap-2 justify-end">
+                <button onClick={() => setIsEditing(true)} className="p-2 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl opacity-0 group-hover:opacity-100 transition-all">
+                    <Pencil className="w-4 h-4" />
+                </button>
+            </td>
+        </tr>
+    );
+};
+
+const CompanyCredentialsModal = ({ 
+  isOpen, 
+  onClose, 
+  companies,
+  onUpdateCompany
+}: { 
+  isOpen: boolean, 
+  onClose: () => void, 
+  companies: Company[],
+  onUpdateCompany: (id: string, name: string, password: string) => void
+}) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 backdrop-blur-sm">
+      <div className="bg-white rounded-3xl shadow-soft w-full max-w-3xl p-8 animate-fade-in-up">
+        <div className="flex justify-between items-center mb-8">
+          <div className="flex items-center gap-4">
+              <div className="bg-indigo-50 p-3 rounded-2xl text-indigo-500">
+                  <Building2 className="w-6 h-6" />
+              </div>
+              <div>
+                  <h2 className="text-2xl font-bold text-slate-800">סיסמאות חברה</h2>
+                  <p className="text-sm text-slate-500">ניהול שמות וקודי גישה לחברות</p>
+              </div>
+          </div>
+          <button onClick={onClose} className="bg-slate-50 p-2 rounded-full text-slate-400 hover:bg-slate-100 transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="overflow-hidden border border-slate-100 rounded-2xl max-h-[400px] overflow-y-auto custom-scrollbar">
+            <table className="w-full text-right text-sm">
+                <thead className="bg-slate-50/50 text-slate-500 font-medium sticky top-0 z-10 backdrop-blur-sm">
+                    <tr>
+                        <th className="p-4 font-normal">שם החברה</th>
+                        <th className="p-4 font-normal">סיסמת גישה</th>
+                        <th className="p-4 w-20"></th>
+                    </tr>
+                </thead>
+                <tbody className="bg-white">
+                    {companies.map(c => (
+                        <CompanyCredentialRow key={c.id} company={c} onUpdate={onUpdateCompany} />
+                    ))}
+                </tbody>
+            </table>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- View: Platform Admin Dashboard ---
+
+const PlatformAdminDashboard = ({
+  companies,
+  users,
+  currentUser,
+  onAddCompany,
+  onToggleCompanyStatus,
+  onDeleteCompany,
+  onAddUserToCompany,
+  onUpdateUser,
+  onDeleteUser,
+  onUpdateCompany
+}: {
+  companies: Company[],
+  users: User[],
+  currentUser: User,
+  onAddCompany: (companyName: string, companyPass: string, adminName: string, adminUser: string, adminPass: string) => void,
+  onToggleCompanyStatus: (id: string) => void,
+  onDeleteCompany: (id: string) => void,
+  onAddUserToCompany: (name: string, u: string, p: string, role: UserRole, companyId: string) => void,
+  onUpdateUser: (id: string, name: string, score: number, username: string, password: string) => void,
+  onDeleteUser: (id: string) => void,
+  onUpdateCompany: (id: string, name: string, password: string) => void
+}) => {
+  const [isAddCompanyOpen, setIsAddCompanyOpen] = useState(false);
+  const [companyToDelete, setCompanyToDelete] = useState<Company | null>(null);
+  const [selectedCompanyForUsers, setSelectedCompanyForUsers] = useState<Company | null>(null);
+  const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isCompanyCredentialsOpen, setIsCompanyCredentialsOpen] = useState(false);
+
+  return (
+      <div className="p-10 h-full overflow-y-auto bg-slate-50/50">
+          <CompanyCreationModal
+              isOpen={isAddCompanyOpen}
+              onClose={() => setIsAddCompanyOpen(false)}
+              onCreate={onAddCompany}
+          />
+
+          <CompanyCredentialsModal 
+             isOpen={isCompanyCredentialsOpen}
+             onClose={() => setIsCompanyCredentialsOpen(false)}
+             companies={companies}
+             onUpdateCompany={onUpdateCompany}
+          />
+          
+          <DeleteConfirmationModal
+              isOpen={!!companyToDelete}
+              onClose={() => setCompanyToDelete(null)}
+              onConfirm={() => companyToDelete && onDeleteCompany(companyToDelete.id)}
+              userName={companyToDelete?.name || ''}
+              title="מחיקת חברה"
+          />
+
+          <CompanyUsersModal
+             isOpen={!!selectedCompanyForUsers}
+             onClose={() => setSelectedCompanyForUsers(null)}
+             company={selectedCompanyForUsers}
+             users={selectedCompanyForUsers ? users.filter(u => u.companyId === selectedCompanyForUsers.id) : []}
+             onUpdateUser={onUpdateUser}
+             onDeleteUser={onDeleteUser}
+             onAddUserClick={() => setIsAddUserModalOpen(true)}
+          />
+
+          <UserCreationModal
+             isOpen={isAddUserModalOpen}
+             onClose={() => setIsAddUserModalOpen(false)}
+             onCreate={(name, u, p, role) => {
+                if (selectedCompanyForUsers) {
+                    onAddUserToCompany(name, u, p, role, selectedCompanyForUsers.id);
+                }
+             }}
+          />
+
+          <PlatformAdminSettingsModal
+             isOpen={isSettingsOpen}
+             onClose={() => setIsSettingsOpen(false)}
+             user={currentUser}
+             onSave={onUpdateUser}
+          />
+
+          <div className="mb-10 flex items-end justify-between">
+              <div>
+                  <h1 className="text-4xl font-black text-slate-800 mb-3 tracking-tight">ניהול מערכת</h1>
+                  <p className="text-slate-500 text-lg font-light">שליטה בכלל החברות והארגונים</p>
+              </div>
+              <div className="flex gap-4">
+                  <button 
+                      onClick={() => setIsCompanyCredentialsOpen(true)}
+                      className="flex items-center gap-2 px-6 py-4 bg-white text-slate-600 border border-slate-200 rounded-2xl shadow-sm hover:bg-slate-50 text-sm font-bold transition-all"
+                  >
+                      <Key className="w-5 h-5 text-indigo-500" />
+                      סיסמאות חברה
+                  </button>
+                  <button 
+                      onClick={() => setIsSettingsOpen(true)}
+                      className="flex items-center gap-2 px-6 py-4 bg-white text-slate-600 border border-slate-200 rounded-2xl shadow-sm hover:bg-slate-50 text-sm font-bold transition-all"
+                  >
+                      <Settings className="w-5 h-5 text-slate-400" />
+                      הגדרות מנהל
+                  </button>
+                  <button 
+                      onClick={() => setIsAddCompanyOpen(true)}
+                      className="flex items-center gap-2 px-6 py-4 bg-slate-900 text-white rounded-2xl shadow-xl hover:bg-slate-800 text-sm font-bold transition-all hover:-translate-y-1"
+                  >
+                      <Plus className="w-5 h-5" />
+                      הקמת חברה חדשה
+                  </button>
+              </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {companies.map(company => {
+                  const companyUsers = users.filter(u => u.companyId === company.id);
+                  const isActive = company.status === 'ACTIVE';
+
+                  return (
+                      <div key={company.id} className={`bg-white rounded-[2.5rem] p-8 shadow-soft border border-white relative overflow-hidden group hover:shadow-xl transition-all ${!isActive ? 'opacity-75 grayscale-[0.5]' : ''}`}>
+                          {/* Background Accent */}
+                          <div className={`absolute top-0 right-0 w-full h-1.5 ${isActive ? 'bg-gradient-to-l from-indigo-400 to-cyan-400' : 'bg-slate-300'}`}></div>
+
+                          <div className="flex justify-between items-start mb-8">
+                              <div className="w-16 h-16 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center text-3xl shadow-inner">
+                                  {company.logo ? (
+                                      <img src={company.logo} alt={company.name} className="w-full h-full object-cover rounded-2xl" />
+                                  ) : (
+                                      <span className="font-bold text-slate-300">{company.name.charAt(0)}</span>
+                                  )}
+                              </div>
+                              <div className={`px-3 py-1 rounded-full text-xs font-bold border ${isActive ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
+                                  {isActive ? 'פעיל' : 'מושהה'}
+                              </div>
+                          </div>
+
+                          <h3 className="text-2xl font-bold text-slate-800 mb-2">{company.name}</h3>
+                          
+                          <div className="grid grid-cols-2 gap-4 my-6">
+                              <div className="bg-slate-50 rounded-2xl p-4">
+                                  <div className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">משתמשים</div>
+                                  <div className="text-2xl font-black text-slate-700">{companyUsers.length}</div>
+                              </div>
+                              <div className="bg-slate-50 rounded-2xl p-4">
+                                  <div className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">נוצר ב</div>
+                                  <div className="text-lg font-bold text-slate-600 font-mono">
+                                      {new Date(company.createdAt).toLocaleDateString('he-IL')}
+                                  </div>
+                              </div>
+                          </div>
+
+                          <div className="flex gap-3">
+                              <button
+                                  onClick={() => setSelectedCompanyForUsers(company)}
+                                  className="flex-1 py-3 bg-sky-50 text-sky-600 hover:bg-sky-100 rounded-2xl font-bold transition-all flex items-center justify-center gap-2"
+                                  title="ניהול משתמשים"
+                              >
+                                  <Users className="w-4 h-4" />
+                                  משתמשים
+                              </button>
+                              <button 
+                                  onClick={() => onToggleCompanyStatus(company.id)}
+                                  className={`p-3 rounded-2xl transition-all flex items-center justify-center ${isActive ? 'bg-amber-50 text-amber-600 hover:bg-amber-100' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'}`}
+                                  title={isActive ? 'השהה' : 'הפעל'}
+                              >
+                                  <Power className="w-5 h-5" />
+                              </button>
+                              <button 
+                                  onClick={() => setCompanyToDelete(company)}
+                                  className="p-3 bg-slate-50 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-2xl transition-all"
+                              >
+                                  <Trash2 className="w-5 h-5" />
+                              </button>
+                          </div>
+                      </div>
+                  );
+              })}
+          </div>
+      </div>
+  );
+}
+
 // --- View: Admin Dashboard (Command Center) ---
 
 const AdminDashboard = ({ 
@@ -1540,7 +2316,7 @@ const AdminDashboard = ({
   const [isPersonalWorkspaceOpen, setIsPersonalWorkspaceOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
 
-  const employees = users.filter(u => u.role !== 'SUPER_ADMIN');
+  const employees = users.filter(u => u.role !== 'SUPER_ADMIN' && u.role !== 'PLATFORM_ADMIN');
   const myTasks = tasks.filter(t => t.assigneeId === currentUser.id);
 
   return (
@@ -1548,7 +2324,7 @@ const AdminDashboard = ({
         <CredentialsModal
             isOpen={isCredentialsOpen}
             onClose={() => setIsCredentialsOpen(false)}
-            users={users}
+            users={users.filter(u => u.role !== 'PLATFORM_ADMIN')}
             onUpdateUser={onUpdateUser}
         />
         
@@ -1814,25 +2590,43 @@ const AdminDashboard = ({
 export default function App() {
     const [users, setUsers] = useState<User[]>([]);
     const [tasks, setTasks] = useState<Task[]>([]);
+    const [companies, setCompanies] = useState<Company[]>([]);
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [loginError, setLoginError] = useState('');
     const [isLoadingUsers, setIsLoadingUsers] = useState(true);
 
+    // Auth Flow State
+    const [loginStep, setLoginStep] = useState<'COMPANY_SELECT' | 'USER_LOGIN' | 'PLATFORM_LOGIN'>('COMPANY_SELECT');
+    const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
+
     // --- Firebase Sync ---
+
+    // Sync Companies
+    useEffect(() => {
+        const unsubscribe = onSnapshot(query(collection(db, 'companies'), orderBy('name')), (snapshot) => {
+            const companiesData: Company[] = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            } as Company));
+            setCompanies(companiesData);
+        });
+        return () => unsubscribe();
+    }, []);
 
     // Sync Users
     useEffect(() => {
         const unsubscribe = onSnapshot(query(collection(db, 'users'), orderBy('name')), (snapshot) => {
-            if (snapshot.empty && isLoadingUsers) {
-                // SEED DATA if empty
+            if (snapshot.empty && isLoadingUsers && companies.length === 0) {
+                // SEED INITIAL PLATFORM ADMIN if absolutely empty
                 const seedAdmin = {
                     name: 'מנהל מערכת',
-                    role: 'SUPER_ADMIN',
-                    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Admin',
+                    role: 'PLATFORM_ADMIN',
+                    companyId: 'platform',
+                    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Platform',
                     efficiencyScore: 100,
                     status: 'ONLINE',
                     personalNotes: '',
-                    username: 'admin',
+                    username: 'platform',
                     password: '123'
                 };
                 addDoc(collection(db, 'users'), seedAdmin);
@@ -1843,11 +2637,18 @@ export default function App() {
                 ...doc.data()
             } as User));
             setUsers(usersData);
+            
+            // If logged in, update currentUser from the list to reflect latest changes
+            if (currentUser) {
+                const latestUser = usersData.find(u => u.id === currentUser.id);
+                if (latestUser) setCurrentUser(latestUser);
+            }
+            
             setIsLoadingUsers(false);
         });
 
         return () => unsubscribe();
-    }, []);
+    }, [companies.length, currentUser?.id]);
 
     // Sync Tasks
     useEffect(() => {
@@ -1881,15 +2682,63 @@ export default function App() {
 
     // Handlers
 
-    const handleLogin = (u: string, p: string) => {
-        const user = users.find(user => user.username === u && user.password === p);
+    const handleCompanyLogin = (companyId: string, password: string) => {
+        const company = companies.find(c => c.id === companyId);
+        if (!company) {
+             setLoginError('חברה לא נמצאה');
+             return;
+        }
+
+        if (company.status === 'SUSPENDED') {
+            setLoginError('הגישה לחברה זו נחסמה זמנית');
+            return;
+        }
+
+        // In a real app, hash checking should be here.
+        // For existing companies without password, we might skip check or default.
+        if (company.password && company.password !== password) {
+             setLoginError('סיסמת חברה שגויה');
+             return;
+        }
+        // If company has no password set (legacy), we allow entry or warn. 
+        // Assuming strict mode for now if password exists.
+
+        setSelectedCompany(company);
+        setLoginStep('USER_LOGIN');
+        setLoginError('');
+    };
+
+    const handleUserLogin = (u: string, p: string) => {
+        if (!selectedCompany) return;
+
+        const user = users.find(user => 
+            user.companyId === selectedCompany.id && 
+            user.username === u && 
+            user.password === p
+        );
+
         if (user) {
             setCurrentUser(user);
             setLoginError('');
-            // Update status to online
             updateDoc(doc(db, 'users', user.id), { status: 'ONLINE' });
         } else {
             setLoginError('שם משתמש או סיסמא שגויים');
+        }
+    };
+
+    const handlePlatformAdminLogin = (u: string, p: string) => {
+         const admin = users.find(user => 
+            user.role === 'PLATFORM_ADMIN' && 
+            user.username === u && 
+            user.password === p
+        );
+
+        if (admin) {
+             setCurrentUser(admin);
+             setLoginError('');
+             updateDoc(doc(db, 'users', admin.id), { status: 'ONLINE' });
+        } else {
+             setLoginError('פרטי גישה שגויים עבור מנהל מערכת');
         }
     };
 
@@ -1899,13 +2748,18 @@ export default function App() {
              updateDoc(doc(db, 'users', currentUser.id), { status: 'OFFLINE' });
         }
         setCurrentUser(null);
+        setSelectedCompany(null);
+        setLoginStep('COMPANY_SELECT');
         setLoginError('');
     };
 
     // Task Actions
     const handleAddTask = async (task: Partial<Task>) => {
+        if (!currentUser) return;
+        
         const newTask: Omit<Task, 'id'> = {
-            assigneeId: task.assigneeId || (currentUser?.id || ''),
+            companyId: currentUser.companyId,
+            assigneeId: task.assigneeId || (currentUser.id || ''),
             title: task.title || 'משימה חדשה',
             type: task.type || 'FLOATING',
             status: 'PENDING',
@@ -1965,7 +2819,9 @@ export default function App() {
     
     // Admin Actions
     const handleCreateUrgentTask = async (userId: string) => {
+        if (!currentUser) return;
         const newTask: Omit<Task, 'id'> = {
+            companyId: currentUser.companyId,
             assigneeId: userId,
             title: 'משימה דחופה',
             type: 'URGENT',
@@ -1987,8 +2843,11 @@ export default function App() {
         });
     };
 
-    const handleAddUser = async (name: string, username: string, pass: string, role: UserRole) => {
+    const handleAddUser = async (name: string, username: string, pass: string, role: UserRole, targetCompanyId?: string) => {
+        if (!currentUser) return;
+        const cid = targetCompanyId || currentUser.companyId;
         const newUser: Omit<User, 'id'> = {
+            companyId: cid,
             name,
             username,
             password: pass,
@@ -2002,7 +2861,6 @@ export default function App() {
 
     const handleDeleteUser = async (id: string) => {
         await deleteDoc(doc(db, 'users', id));
-        // Optional: Delete user tasks? leaving them for now or reassigning
     };
 
     const handleToggleUserStatus = async (id: string) => {
@@ -2032,6 +2890,60 @@ export default function App() {
         await deleteDoc(doc(db, 'tasks', taskId));
     };
 
+    const handleUpdateCompany = async (id: string, name: string, password: string) => {
+        await updateDoc(doc(db, 'companies', id), {
+            name,
+            password
+        });
+    };
+
+    // Platform Admin Actions
+    const handleAddCompany = async (companyName: string, companyPass: string, adminName: string, adminUser: string, adminPass: string) => {
+        const batch = writeBatch(db);
+        
+        // 1. Create Company Ref (auto-id)
+        const companyRef = doc(collection(db, 'companies'));
+        const newCompany = {
+            name: companyName,
+            status: 'ACTIVE' as const, 
+            logo: '', 
+            createdAt: new Date().toISOString(),
+            password: companyPass
+        };
+        batch.set(companyRef, newCompany);
+
+        // 2. Create Initial Super Admin for that company
+        const userRef = doc(collection(db, 'users'));
+        const newAdmin = {
+            companyId: companyRef.id,
+            name: adminName,
+            username: adminUser,
+            password: adminPass,
+            role: 'SUPER_ADMIN' as const,
+            avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${adminName}`,
+            efficiencyScore: 100,
+            status: 'OFFLINE' as const
+        };
+        batch.set(userRef, newAdmin);
+
+        await batch.commit();
+    };
+
+    const handleToggleCompanyStatus = async (companyId: string) => {
+        const company = companies.find(c => c.id === companyId);
+        if (company) {
+            await updateDoc(doc(db, 'companies', companyId), {
+                status: company.status === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE'
+            });
+        }
+    };
+
+    const handleDeleteCompany = async (companyId: string) => {
+        // In a real app, this should be a cloud function to delete all sub-collections
+        // Here we just delete the company doc. Users will be orphaned but filtered out.
+        await deleteDoc(doc(db, 'companies', companyId));
+    };
+
     // Modal state for task creation
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
     const [taskModalAssignee, setTaskModalAssignee] = useState<string | null>(null);
@@ -2041,9 +2953,54 @@ export default function App() {
         setIsTaskModalOpen(true);
     };
 
+    // --- MAIN RENDER ---
+
     if (!currentUser) {
-        return <LoginScreen onLogin={handleLogin} error={loginError} isLoading={isLoadingUsers} />;
+        if (loginStep === 'COMPANY_SELECT') {
+            return (
+                <CompanyLoginScreen 
+                    companies={companies}
+                    onCompanyLogin={handleCompanyLogin}
+                    onPlatformLoginClick={() => {
+                        setLoginStep('PLATFORM_LOGIN');
+                        setLoginError('');
+                    }}
+                    error={loginError}
+                    isLoading={isLoadingUsers}
+                />
+            );
+        } else if (loginStep === 'USER_LOGIN' && selectedCompany) {
+            return (
+                <UserLoginScreen 
+                    company={selectedCompany}
+                    onLogin={handleUserLogin}
+                    onBack={() => {
+                        setLoginStep('COMPANY_SELECT');
+                        setSelectedCompany(null);
+                        setLoginError('');
+                    }}
+                    error={loginError}
+                    isLoading={isLoadingUsers}
+                />
+            );
+        } else if (loginStep === 'PLATFORM_LOGIN') {
+             return (
+                 <PlatformAdminLoginScreen
+                    onLogin={handlePlatformAdminLogin}
+                    onBack={() => {
+                        setLoginStep('COMPANY_SELECT');
+                        setLoginError('');
+                    }}
+                    error={loginError}
+                    isLoading={isLoadingUsers}
+                 />
+             );
+        }
     }
+
+    // Filter Data for Views
+    const companyUsers = users.filter(u => u.companyId === currentUser.companyId);
+    const companyTasks = tasks.filter(t => t.companyId === currentUser.companyId);
 
     return (
         <div className="h-screen w-screen bg-slate-50 font-sans text-right" dir="rtl">
@@ -2062,10 +3019,23 @@ export default function App() {
                 </button>
             </div>
 
-            {currentUser.role === 'SUPER_ADMIN' ? (
-                <AdminDashboard 
+            {currentUser.role === 'PLATFORM_ADMIN' ? (
+                <PlatformAdminDashboard 
+                    companies={companies}
                     users={users}
-                    tasks={tasks}
+                    currentUser={currentUser}
+                    onAddCompany={handleAddCompany}
+                    onToggleCompanyStatus={handleToggleCompanyStatus}
+                    onDeleteCompany={handleDeleteCompany}
+                    onAddUserToCompany={handleAddUser}
+                    onUpdateUser={handleUpdateUser}
+                    onDeleteUser={handleDeleteUser}
+                    onUpdateCompany={handleUpdateCompany}
+                />
+            ) : currentUser.role === 'SUPER_ADMIN' ? (
+                <AdminDashboard 
+                    users={companyUsers}
+                    tasks={companyTasks}
                     currentUser={currentUser}
                     onCreateUrgent={handleCreateUrgentTask}
                     onAddTask={openTaskModal}
@@ -2080,7 +3050,7 @@ export default function App() {
             ) : (
                 <EmployeeCockpit 
                     user={currentUser}
-                    tasks={tasks.filter(t => t.assigneeId === currentUser.id)}
+                    tasks={companyTasks.filter(t => t.assigneeId === currentUser.id)}
                     onToggle={handleToggleTask}
                     onComplete={handleCompleteTask}
                     onAddTask={() => openTaskModal(currentUser.id)}

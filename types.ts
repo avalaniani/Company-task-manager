@@ -1,10 +1,20 @@
-export type UserRole = 'SUPER_ADMIN' | 'EMPLOYEE';
+export type UserRole = 'PLATFORM_ADMIN' | 'SUPER_ADMIN' | 'EMPLOYEE';
 
 export type TaskType = 'LOCKED' | 'FLOATING' | 'URGENT';
 export type TaskStatus = 'PENDING' | 'IN_PROGRESS' | 'PAUSED' | 'COMPLETED' | 'BLOCKED';
 
+export interface Company {
+  id: string;
+  name: string;
+  logo: string;
+  status: 'ACTIVE' | 'SUSPENDED';
+  createdAt: string;
+  password?: string; // Company access code/password
+}
+
 export interface User {
   id: string;
+  companyId: string; // Links user to a specific company
   name: string;
   role: UserRole;
   avatar: string;
@@ -17,6 +27,7 @@ export interface User {
 
 export interface Task {
   id: string;
+  companyId: string; // Links task to a specific company
   assigneeId: string;
   title: string;
   type: TaskType;
