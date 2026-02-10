@@ -421,6 +421,13 @@ const PlatformAdminSettingsModal = ({
     const [username, setUsername] = useState(user.username);
     const [password, setPassword] = useState(user.password);
 
+    useEffect(() => {
+        if (isOpen) {
+            setUsername(user.username);
+            setPassword(user.password);
+        }
+    }, [isOpen, user]);
+
     if (!isOpen) return null;
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -788,13 +795,13 @@ const DeleteConfirmationModal = ({
   isOpen, 
   onClose, 
   onConfirm,
-  userName,
-  title = "מחיקת עובד"
+  itemName,
+  title = "מחיקת פריט"
 }: { 
   isOpen: boolean, 
   onClose: () => void, 
   onConfirm: () => void,
-  userName: string,
+  itemName: string,
   title?: string
 }) => {
   if (!isOpen) return null;
@@ -808,7 +815,7 @@ const DeleteConfirmationModal = ({
             </div>
             <h2 className="text-xl font-bold text-slate-800 mb-2">{title}</h2>
             <p className="text-slate-500 mb-8 text-sm leading-relaxed">
-                האם אתה בטוח שברצונך למחוק את <strong>{userName}</strong>?
+                האם אתה בטוח שברצונך למחוק את <strong>{itemName}</strong>?
                 <br />
                 פעולה זו אינה הפיכה.
             </p>
@@ -1767,9 +1774,26 @@ const PlatformAdminDashboard = ({
 }) => {
     const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
     const [managingUsersCompanyId, setManagingUsersCompanyId] = useState<string | null>(null);
+    const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+    const [companyToDelete, setCompanyToDelete] = useState<Company | null>(null);
     
     return (
         <div className="p-8 bg-slate-50 min-h-screen">
+            <DeleteConfirmationModal
+                isOpen={!!companyToDelete}
+                onClose={() => setCompanyToDelete(null)}
+                onConfirm={() => companyToDelete && onDeleteCompany(companyToDelete.id)}
+                itemName={companyToDelete?.name || ''}
+                title="מחיקת חברה"
+            />
+
+            <PlatformAdminSettingsModal
+                isOpen={isSettingsModalOpen}
+                onClose={() => setIsSettingsModalOpen(false)}
+                user={currentUser}
+                onSave={onUpdateUser}
+            />
+
             <CompanyCreationModal 
                 isOpen={isCompanyModalOpen}
                 onClose={() => setIsCompanyModalOpen(false)}
@@ -1789,13 +1813,22 @@ const PlatformAdminDashboard = ({
                     <h1 className="text-3xl font-black text-slate-800">ניהול פלטפורמה</h1>
                     <p className="text-slate-500">ניהול חברות ומנויים</p>
                 </div>
-                <button 
-                    onClick={() => setIsCompanyModalOpen(true)}
-                    className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all"
-                >
-                    <Plus className="w-5 h-5" />
-                    הקמת חברה חדשה
-                </button>
+                <div className="flex gap-4">
+                    <button 
+                        onClick={() => setIsSettingsModalOpen(true)}
+                        className="flex items-center gap-2 px-6 py-3 bg-white text-slate-700 border border-slate-200 rounded-2xl font-bold hover:bg-slate-50 shadow-sm transition-all"
+                    >
+                        <Settings className="w-5 h-5" />
+                        הגדרות מנהל
+                    </button>
+                    <button 
+                        onClick={() => setIsCompanyModalOpen(true)}
+                        className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all"
+                    >
+                        <Plus className="w-5 h-5" />
+                        הקמת חברה חדשה
+                    </button>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -1821,7 +1854,7 @@ const PlatformAdminDashboard = ({
                                     <button onClick={() => onToggleCompanyStatus(company.id)} className="p-2 text-slate-400 hover:text-amber-500 hover:bg-amber-50 rounded-lg transition-colors">
                                         <Power className="w-4 h-4" />
                                     </button>
-                                     <button onClick={() => onDeleteCompany(company.id)} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors">
+                                     <button onClick={() => setCompanyToDelete(company)} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors">
                                         <Trash2 className="w-4 h-4" />
                                     </button>
                                 </div>
@@ -1951,7 +1984,8 @@ const AdminDashboard = ({
             isOpen={!!userToDelete}
             onClose={() => setUserToDelete(null)}
             onConfirm={() => userToDelete && onDeleteUser(userToDelete.id)}
-            userName={userToDelete?.name || ''}
+            itemName={userToDelete?.name || ''}
+            title="מחיקת עובד"
         />
 
         <AdminPersonalWorkspace
