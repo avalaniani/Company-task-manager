@@ -11,6 +11,7 @@ export interface Company {
   status: 'ACTIVE' | 'SUSPENDED';
   createdAt: string;
   password?: string; // Company access code/password
+  siteManagerPassword?: string; // Password for site manager signatures
 }
 
 export interface User {
@@ -24,6 +25,7 @@ export interface User {
   personalNotes?: string;
   username: string;
   password: string;
+  isDeleted?: boolean; // For soft-delete/restore
 }
 
 export interface Task {
@@ -40,6 +42,9 @@ export interface Task {
   startTimeConstraint?: string; // For LOCKED tasks (HH:MM)
   dueTime?: string;
   blockedReason?: string; // Reason for blockage
+  createdBy?: string;
+  creatorRole?: UserRole;
+  isDeleted?: boolean; // For soft-delete/restore
 }
 
 export interface AttendanceRecord {
@@ -51,4 +56,17 @@ export interface AttendanceRecord {
   endTime?: string; // ISO String
   totalMinutes?: number;
   status: 'ACTIVE' | 'COMPLETED';
+  isSigned?: boolean;
+  signedBy?: string;
+  signedAt?: string;
+}
+
+export interface CalendarEvent {
+  id: string;
+  userId: string; // The manager who owns this event
+  date: string; // YYYY-MM-DD
+  time: string; // HH:MM
+  title: string;
+  type: 'MEETING' | 'TASK' | 'REMINDER';
+  createdAt: string;
 }
